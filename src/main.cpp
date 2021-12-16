@@ -1,10 +1,14 @@
 // Include all the libraries used in this program
 #include <Arduino.h>
 #include <EEPROM.h>
+#include <Servo.h>
 
 // Define constant values, which will be used in our program
 #define SAFE_CLOSED_POSITION_DEGREES 0
 #define SAFE_OPEN_POSITION_DEGREES 90
+
+#define SETTING_PORTD_PINS {4, 5, 6, 7};
+#define SETTING
 
 /**
  * This enum type definition will be used to determine the current state of the safe. The save
@@ -27,7 +31,7 @@ typedef enum State {
 typedef struct StateController {
     State currentState;
 
-    State getState() {
+    State getState() const {
         return currentState;
     }
 
@@ -36,7 +40,23 @@ typedef struct StateController {
     }
 } StateController;
 
+typedef struct SegmentValuePair {
+    int decimalValue;
+    int binaryValue;
+
+} SegmentValuePair;
+
+SegmentValuePair createSegmentValuePair(int decimal, int binary) {
+    SegmentValuePair segmentValuePair = {
+            .decimalValue = decimal,
+            .binaryValue = binary
+    };
+
+    return segmentValuePair;
+}
+
 /**
+ *
  * The ServoController structure will be used to control the Servo motor with ease.
  * Using the controller, we are able to properly save the current position of the Servo and adjust the angle.
  *
@@ -108,14 +128,46 @@ void setup() {
     // Initialize the Servo controller by creating a new ServoController structure
     servoController = {
             .servo = localServo,
+            .stateController = stateController,
             .position = 0
     };
 }
 
+class Segment {
+    int decimalValue, binaryValue;
+
+public:
+    static const Segment ZERO = Segment(0,B00000000);
+};
+
+
+//class Segment {
+//public:
+//    static const Segment ZERO;
+//    static const Segment ONE;
+//    static const Segment TWO;
+//    static const Segment THREE;
+//
+//private:
+//    int decimalValue;
+//    int binaryValue;
+//
+//private:
+//    Segment(int decimalValue, int binaryValue) {
+//        this->decimalValue = decimalValue;
+//        this->binaryValue = binaryValue;
+//    }
+//
+//public:
+//    ONE = Segment(0,0);
+//};
+
 /**
-* Loop function
-*/
-void loop() {
+ * testing function, delete if done
+ */
+void testing() {
+
+
     // Open and wait 1 second
     servoController.setOpen();
     servoController.rotate();
@@ -125,4 +177,26 @@ void loop() {
     servoController.setClosed();
     servoController.rotate();
     delay(1000);
+}
+
+/**
+* Loop function
+*/
+void loop() {
+    State currentState = stateController.getState();
+
+    switch (currentState) {
+        case State::SAFE_OPEN:
+
+            break;
+
+        case State::SAFE_CLOSED:
+
+            break;
+
+        case State::BLOCKED:
+
+            break;
+
+    }
 }
