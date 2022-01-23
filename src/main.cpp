@@ -9,17 +9,26 @@
 #define SAFE_OPEN_POSITION_DEGREES 90
 
 // Pin settings
-#define SETTING__SEVEN_SEGMENT_ONE_PIN 2
-#define SETTING__SEVEN_SEGMENT_TWO_PIN 3
-#define SETTING__SEVEN_SEGMENT_THREE_PIN 4
+#define SETTING__SEVEN_SEGMENT_ONE_PIN 2 //2
+#define SETTING__SEVEN_SEGMENT_TWO_PIN 3 //3
+#define SETTING__SEVEN_SEGMENT_THREE_PIN 4 //4
 
-#define SETTING__DATA_PIN 5
-#define SETTING__LATCH_PIN 6
-#define SETTING__CLOCK_PIN 7
+#define SETTING__DATA_PIN 5 //5
+#define SETTING__LATCH_PIN 6 //6
+#define SETTING__CLOCK_PIN 7 //7
 
-#define SETTING__ENCODER_PIN_A 8
-#define SETTING__ENCODER_PIN_B 9
-#define SETTING__ENCODER_BUTTON_PIN 13
+#define SETTING__SENSOR_PIN A3
+#define SETTING__SERVO_PIN 12
+#define SETTING__BUZZER_PIN A0
+#define SETTING__RED_LED_PIN A2
+#define SETTING__GREEN_LED_PIN A1
+
+#define SETTING__ENCODER_PIN_A 8 //8
+#define SETTING__ENCODER_PIN_B 9 //9
+#define SETTING__ENCODER_BUTTON_PIN 13 //13
+
+#define SETTING__RESET_BUTTON_PIN 10
+#define SETTING__CONFIRM_BUTTON_PIN 11
 
 /**
  * This enum type definition will be used to determine the current state of the safe. The save
@@ -27,16 +36,29 @@
  *
  * - SAFE_OPEN: The safe is currently opened, which means a correct password is entered.
  * - SAFE_CLOSED: The safe is currently closed, which means a password is yet to be entered.
+ * - SAFE_RESET: The safe is currently resetting, which means a password is being entered at this moment.
  * - BLOCKED: The safe is in a blocked state, which means the user is not able to re-enter a password at the time.
  */
 typedef enum State {
-    SAFE_OPEN, SAFE_CLOSED, BLOCKED
+    SAFE_OPEN, SAFE_CLOSED, SAFE_RESET, BLOCKED
 } State;
 
+/**
+ * This enum type definition will be used to have a clear separation of our 7Segement Displays.
+ *
+ * - ONE: The first 7Segment Display
+ * - TWO: The second 7Segment Display
+ * - THREE: The third 7Segment Display
+ */
 typedef enum Display {
     ONE = 1, TWO = 2, THREE = 3
 } Display;
 
+/**
+ * The password structure is a model we use to save the actual integer code into the Arduino memory using EEPROM
+ *
+ * @field code The code of the saved password structure
+ */
 typedef struct Password {
 private:
     int code;
@@ -46,15 +68,30 @@ public:
         this->code = defaultCode;
     }
 
+    /**
+     * Get the current integer code of the password instance
+     * @return the code as an integer type
+     */
     int getCode() const {
         return this->code;
     }
 
+    /**
+     * Set the current integer code of the password instance (This will only change it in local memory, not EEPROM)
+     * @param newCode the new code as integer type
+     */
     void setCode(const int newCode) {
         this->code = newCode;
     }
 } Password;
 
+/**
+ * The segment namespace will be used as an utility to mainly convert a decimal number to a binary value
+ *
+ * Example:
+ *
+ * ZERO (decimal=0, binary=B0)
+ */
 namespace Segment {
     class Pair {
     private:
@@ -90,6 +127,12 @@ namespace Segment {
 
     static const Pair All[] = {ZERO, ONE, TWO, THREE, FOUR, FIVE, SIX, SEVEN, EIGHT, NINE};
 
+    /**
+     * A static method to iteratively search for a valid conversion pair
+     *
+     * @param decimal the decimal integer value
+     * @return the binary value which was paired with the decimal value
+     */
     static int convertDecimal(const int decimal) {
         // Make sure the decimal value is between 0 and 9
         if (decimal < 0 || decimal > 9) return -1;
@@ -127,24 +170,27 @@ public:
     StateController() = default;
 
 public:
-    State getState() const {
-        return currentState;
+    State getState() {
+        return this->currentState;
     }
 
     void setState(State newState) {
         this->currentState = newState;
     }
 
-    Display getDisplay() const {
-        return currentDisplay;
+    Display getDisplay() {
+        return this->currentDisplay;
     }
 
     void setDisplay(Display newDisplay) {
         this->currentDisplay = newDisplay;
     }
 
+    /**
+     * This method will be used to switch to the next display, using a switch statement for simplicity
+     */
     void nextDisplayMode() {
-        switch (currentDisplay) {
+        switch (this->currentDisplay) {
             case Display::ONE:
                 this->setDisplay(Display::TWO);
                 break;
@@ -190,7 +236,6 @@ public:
      */
     void setClosed() {
         this->position = SAFE_CLOSED_POSITION_DEGREES;
-        this->stateController.setState(SAFE_CLOSED);
     }
 
     /**
@@ -200,7 +245,6 @@ public:
      */
     void setOpen() {
         this->position = SAFE_OPEN_POSITION_DEGREES;
-        this->stateController.setState(SAFE_OPEN);
     }
 
     /**
@@ -221,6 +265,10 @@ public:
     }
 } ServoController;
 
+/**
+ * The DigitalController structure will be used to control all the pins for both INPUT and OUTPUT pinModes
+ * There are two private methods which are used to call the internal arduino write/read methods
+ */
 typedef struct DigitalController {
 public:
     DigitalController() = default;
@@ -236,13 +284,17 @@ private:
 
 public:
     void updateSevenSegments(int valueOne, int valueTwo, int valueThree) {
-//        this->write(SETTING__SEVEN_SEGMENT_ONE_PIN, valueOne);
-//        this->write(SETTING__SEVEN_SEGMENT_TWO_PIN, valueTwo);
-//        this->write(SETTING__SEVEN_SEGMENT_THREE_PIN, valueThree);
+        this->write(SETTING__SEVEN_SEGMENT_ONE_PIN, valueOne);
+        this->write(SETTING__SEVEN_SEGMENT_TWO_PIN, valueTwo);
+        this->write(SETTING__SEVEN_SEGMENT_THREE_PIN, valueThree);
+    }
 
-        digitalWrite(SETTING__SEVEN_SEGMENT_ONE_PIN, valueOne);
-        digitalWrite(SETTING__SEVEN_SEGMENT_TWO_PIN, valueTwo);
-        digitalWrite(SETTING__SEVEN_SEGMENT_THREE_PIN, valueThree);
+    void writeRedLed(int value) {
+        this->write(SETTING__RED_LED_PIN, value);
+    }
+
+    void writeGreenLed(int value) {
+        this->write(SETTING__GREEN_LED_PIN, value);
     }
 
     int readRotaryEncoderAPosition() {
@@ -256,8 +308,40 @@ public:
     int readRotaryEncoderButton() {
         return this->read(SETTING__ENCODER_BUTTON_PIN);
     }
+
+    unsigned long lastConfirmButtonRead = millis();
+
+    int readConfirmButton() {
+        int read = this->read(SETTING__CONFIRM_BUTTON_PIN);
+        if (millis() - lastConfirmButtonRead > 250 && read == HIGH) {
+            lastConfirmButtonRead = millis();
+            return HIGH;
+        }
+
+        return LOW;
+    }
+
+    unsigned long lastResetButtonRead = millis();
+
+    int readResetButton() {
+        int read = this->read(SETTING__RESET_BUTTON_PIN);
+        if (millis() - lastResetButtonRead > 250 && read == HIGH) {
+            lastResetButtonRead = millis();
+            return HIGH;
+        }
+
+        return LOW;
+    }
+
+
+    int readSensorButton() {
+        return this->read(SETTING__SENSOR_PIN);
+    }
 } DigitalController;
 
+/**
+ * The ShiftRegisterController will control the shift register based on the Arduino's shiftOut function.
+ */
 typedef struct ShiftRegisterController {
 public:
     ShiftRegisterController() = default;
@@ -270,12 +354,17 @@ public:
     }
 } ShiftRegisterController;
 
+/**
+ * The SegmentController structure will control the actual 7segment displays themselves.
+ * Using the display function, you can simply provide a Display enum type and a decimal value to update a segment.
+ */
 typedef struct SegmentController {
 public:
     DigitalController digitalController;
     ShiftRegisterController shiftRegisterController;
 
-    SegmentController(DigitalController digitalController, ShiftRegisterController shiftRegisterController) {
+    SegmentController(DigitalController digitalController,
+                      ShiftRegisterController shiftRegisterController) {
         this->digitalController = digitalController;
         this->shiftRegisterController = shiftRegisterController;
     }
@@ -283,7 +372,8 @@ public:
     SegmentController() = default;
 
 private:
-    int selectedSegment = 1, currentValueOne = 0, currentValueTwo = 0, currentValueThree = 0;
+    int selectedSegment = 1, blockedCountdown = 5, currentValueOne = 0, currentValueTwo = 0, currentValueThree = 0;
+    unsigned long lastBlockedCountdownUpdate = 0;
 
 public:
     void display(Display display, int numberToDisplay) {
@@ -302,12 +392,43 @@ public:
         delay(1);
     }
 
-    void displayAll() {
-        this->display(Display::ONE,this->getCurrentOne());
-        this->display(Display::TWO,this->getCurrentTwo());
-        this->display(Display::THREE,this->getCurrentThree());
+    void updateCurrentBasedOnDisplay(Display display, int numberToDisplay) {
+        switch (display) {
+            case Display::ONE:
+                this->setCurrentOne(numberToDisplay);
+                break;
+            case Display::TWO:
+                this->setCurrentTwo(numberToDisplay);
+                break;
+            case Display::THREE:
+                this->setCurrentThree(numberToDisplay);
+                break;
+        }
+    }
 
-        Serial.println("t");
+    void displayManual(int one, int two, int three) {
+        this->display(Display::ONE, one);
+        this->display(Display::TWO, two);
+        this->display(Display::THREE, three);
+    }
+
+    void displayAll() {
+        this->display(Display::ONE, this->getCurrentOne());
+        this->display(Display::TWO, this->getCurrentTwo());
+        this->display(Display::THREE, this->getCurrentThree());
+    }
+
+    int updateBlockedCountdown() {
+        if (millis() - lastBlockedCountdownUpdate > 1000) {
+            this->setCurrentOne(0);
+            this->setCurrentTwo(this->blockedCountdown / 10 % 10);
+            this->setCurrentThree(this->blockedCountdown % 10);
+
+            if (this->blockedCountdown-- < 0) return -1;
+            lastBlockedCountdownUpdate = millis();
+        }
+
+        return this->blockedCountdown;
     }
 
     int getSelectedSegment() const {
@@ -343,22 +464,23 @@ public:
     }
 } SegmentController;
 
+/**
+ * The RotaryController stucture will control everything that has something to do with the rotary encoder. Combined
+ * with the DigitalController, it's able to perform actions to flawlessly read and write input/ouput
+ */
 typedef struct RotaryController {
 public:
-    int test = 0;
     DigitalController digitalController;
-    SegmentController segmentController;
 
 public:
-    RotaryController(const DigitalController digitalController, const SegmentController segmentController) {
+    RotaryController(DigitalController digitalController) {
         this->digitalController = digitalController;
-        this->segmentController = segmentController;
     }
 
     RotaryController() = default;
 
 private:
-    int encoderPosition = -1, internalRotaryState = LOW, rotaryEncoderPinALast = LOW;
+    int encoderPosition = -2, internalRotaryState = LOW, rotaryEncoderPinALast = LOW;
 
 public:
     int getEncoderPosition() const {
@@ -369,88 +491,79 @@ public:
         this->encoderPosition = newEncoderPosition;
     }
 
-    int readEncoderPosition() {
-//        int test = 0;
-        this->internalRotaryState = this->digitalController.readRotaryEncoderAPosition();
-//        Serial.print("internalRotaryState = ");
-//        Serial.println(internalRotaryState);
-        if (this->rotaryEncoderPinALast == LOW && this->internalRotaryState == HIGH) {
-
-
-            if(digitalRead(SETTING__ENCODER_PIN_B) == LOW)
-            {
-                test--;
-                if(test == -1)
-                {
-                    test = 9;
-                }
-            }
-            else
-            {
-                test++;
-                if(test == 10)
-                {
-                    test = 0;
-                }
-            }
-//            if (this->digitalController.readRotaryEncoderBPosition() == LOW) {
-//                this->setEncoderPosition((this->getEncoderPosition() - 1) == -1 ? 9 : this->getEncoderPosition());
-//                test = (test - 1) == -1 ? 9 : test;
-//            } else {
-//                this->setEncoderPosition((this->getEncoderPosition() + 1) == 10 ? 0 : this->getEncoderPosition());
-//                test = (test + 1) == 10 ? 0 : test;
-//            }
-
-//            Serial.print(">>>> getEncoderPosition = ");
-//            Serial.println(this->getEncoderPosition());
-        }
-
-        this->rotaryEncoderPinALast = this->internalRotaryState;
-        return test;
-    }
-
-    void checkInputEncoderPositionAndButton() {
-        static int selectedSegment = this->segmentController.getSelectedSegment();
-        if (this->digitalController.readRotaryEncoderButton() == LOW) {
-            switch (selectedSegment) {
-                case 1:
-                    this->setEncoderPosition(this->segmentController.getCurrentOne());
-                    break;
-                case 2:
-                    this->setEncoderPosition(this->segmentController.getCurrentTwo());
-                    break;
-                case 3:
-                    this->setEncoderPosition(this->segmentController.getCurrentThree());
-                    break;
-                default:
-                    break;
-            }
-
-            this->segmentController.setSelectedSegment(this->segmentController.getSelectedSegment() + 1);
-            while (this->digitalController.readRotaryEncoderButton() == LOW) {
-                this->segmentController.displayAll();
-            }
-        }
-
-        switch (selectedSegment) {
-            case 1:
-                this->segmentController.setCurrentOne(this->getEncoderPosition());
+    void recoverEncoderValueOfDisplay(Display display, int currentOne, int currentTwo, int currentThree) {
+        switch (display) {
+            case Display::ONE:
+                this->setEncoderPosition(currentOne);
                 break;
-            case 2:
-                this->segmentController.setCurrentTwo(this->getEncoderPosition());
+            case Display::TWO:
+                this->setEncoderPosition(currentTwo);
                 break;
-            case 3:
-                this->segmentController.setCurrentThree(this->getEncoderPosition());
+            case Display::THREE:
+                this->setEncoderPosition(currentThree);
                 break;
             default:
                 break;
         }
     }
+
+    int readEncoderPosition() {
+        this->internalRotaryState = this->digitalController.readRotaryEncoderAPosition();
+        if (this->rotaryEncoderPinALast == LOW && this->internalRotaryState == HIGH) {
+
+            if (this->digitalController.readRotaryEncoderBPosition() == LOW) {
+                this->setEncoderPosition(this->getEncoderPosition() - 1);
+                if (this->getEncoderPosition() == -1) this->setEncoderPosition(9);
+            } else {
+                this->setEncoderPosition(this->getEncoderPosition() + 1);
+                if (this->getEncoderPosition() == 10) this->setEncoderPosition(0);
+            }
+        }
+
+        this->rotaryEncoderPinALast = this->internalRotaryState;
+        return this->getEncoderPosition();
+    }
+
+    unsigned long lastDisplayModeCheck = 0;
+
+    int checkDisplayModeChange() {
+        if (this->digitalController.readRotaryEncoderButton() == LOW
+            && millis() - lastDisplayModeCheck > 300) {
+            lastDisplayModeCheck = millis();
+            return 1;
+        }
+        return 0;
+    }
 } RotaryController;
 
+/**
+ * The BuzzerController structure will control the buzzer used to play certain tones. The buzzer is programmed to
+ * always play at a frequency of 1100Hz.
+ */
+typedef struct BuzzerController {
+public:
+    BuzzerController() = default;
+
+public:
+    void play(int timeInSeconds) {
+        tone(SETTING__BUZZER_PIN, 1100, timeInSeconds * 1000);
+    }
+
+    void stop() {
+        noTone(SETTING__BUZZER_PIN);
+    }
+} BuzzerController;
+
+/**
+ * The PasswordController structure is the controller of the Password structure to handle actions like, saving, reading,
+ * and resetting the safe password.
+ *
+ * @see Password
+ */
 typedef struct PasswordController {
 private:
-    Password currentPassword = Password(0000);
+    Password currentPassword = Password(000);
+    int passwordTries = 3;
 
 private:
     void put(Password password) {
@@ -462,7 +575,7 @@ private:
     }
 
     Password read() {
-        Password password = Password(0000);
+        Password password = Password(000);
         EEPROM.get(0, password);
         return password;
     }
@@ -471,6 +584,9 @@ public:
     void savePassword(int code) {
         this->currentPassword.setCode(code);
         this->put(this->currentPassword);
+
+        Serial.print("Password saved: ");
+        Serial.println(code);
     }
 
     Password readPassword() {
@@ -481,9 +597,27 @@ public:
         return this->currentPassword;
     }
 
+    int convertDigits(int first, int second, int third) {
+        int one = first * 100;
+        int two = second * 10;
+        return one + two + third;
+    }
+
     void resetPassword() {
-        this->currentPassword = Password(0000);
+        this->currentPassword = Password(000);
         this->reset();
+    }
+
+    void decreasePasswordTries() {
+        this->passwordTries--;
+    }
+
+    int getPasswordTries() const {
+        return this->passwordTries;
+    }
+
+    void resetPasswordTries() {
+        this->passwordTries = 3;
     }
 } PasswordController;
 
@@ -495,6 +629,7 @@ ShiftRegisterController shiftRegisterController;
 SegmentController segmentController;
 RotaryController rotaryController;
 PasswordController passwordController;
+BuzzerController buzzerController;
 
 /**
  * Setup function
@@ -502,7 +637,7 @@ PasswordController passwordController;
 void setup() {
     // Initialize a new Servo instance, and attach it to a pin
     Servo localServo;
-    localServo.attach(7);
+    localServo.attach(SETTING__SERVO_PIN);
 
     // Initialize the State controller by creating a new StateController structure
     stateController = StateController(SAFE_CLOSED, ONE);
@@ -520,10 +655,13 @@ void setup() {
     segmentController = SegmentController(digitalController, shiftRegisterController);
 
     // Initialize the Rotary controller by creating a new RotaryController structure
-    rotaryController = RotaryController(digitalController, segmentController);
+    rotaryController = RotaryController(digitalController);
 
     // Initialize the Password controller by creating a new PasswordController structure
     passwordController = PasswordController();
+
+    // Initialize the Buzzer controller by creating a new BuzzerController structure
+    buzzerController = BuzzerController();
 
     // Start a new Serial instance
     Serial.begin(SERIAL_BOUND);
@@ -535,59 +673,155 @@ void setup() {
     pinMode(SETTING__SEVEN_SEGMENT_ONE_PIN, OUTPUT);
     pinMode(SETTING__SEVEN_SEGMENT_TWO_PIN, OUTPUT);
     pinMode(SETTING__SEVEN_SEGMENT_THREE_PIN, OUTPUT);
+    pinMode(SETTING__RED_LED_PIN, OUTPUT);
+    pinMode(SETTING__GREEN_LED_PIN, OUTPUT);
 
     // Set all the input pins to the correct mode
     pinMode(SETTING__ENCODER_PIN_A, INPUT);
     pinMode(SETTING__ENCODER_PIN_B, INPUT);
     pinMode(SETTING__ENCODER_BUTTON_PIN, INPUT);
-}
+    pinMode(SETTING__CONFIRM_BUTTON_PIN, INPUT);
+    pinMode(SETTING__RESET_BUTTON_PIN, INPUT);
 
-/**
- * testing function, delete if done
- */
-void testing() {
-    shiftOut(0, 0, MSBFIRST, Segment::convertDecimal(1));
-    int binary = Segment::convertDecimal(1);
-
-    printf("%d", binary);
-
-    // Open and wait 1 second
-    servoController.setOpen();
-    servoController.rotate();
-    delay(1000);
-
-    // Close and wait 1 second
+    // Boot up reset
     servoController.setClosed();
     servoController.rotate();
-    delay(1000);
 }
 
 /**
 * The main thread function of the program
 */
 void loop() {
-    const State currentState = stateController.getState();
-    const int currentEncoderPosition = rotaryController.readEncoderPosition();
+    State currentState = digitalController.readSensorButton() == HIGH ? State::SAFE_CLOSED : stateController.getState();
+    Display currentDisplay = stateController.getDisplay();
 
-//    Serial.print("pos = ");
-//    Serial.println(currentEncoderPosition);
+    int currentDigitOne = segmentController.getCurrentOne();
+    int currentDigitTwo = segmentController.getCurrentTwo();
+    int currentDigitThree = segmentController.getCurrentThree();
 
-//    segmentController.displayAll();
+    // Open state
+    if (currentState == State::SAFE_OPEN) {
+        digitalController.writeGreenLed(HIGH);
 
-    segmentController.display(Display::ONE,6);
+        if (digitalController.readResetButton() == HIGH) {
+            stateController.setState(State::SAFE_RESET);
+            Serial.println("Switched to resetting state");
+            return;
+        }
 
-    switch (currentState) {
-        case State::SAFE_OPEN:
+        if (digitalController.readConfirmButton() == HIGH) {
+            stateController.setState(SAFE_CLOSED);
+            servoController.setClosed();
+            servoController.rotate();
+            digitalController.writeGreenLed(LOW);
+            return;
+        }
 
-            break;
+        // Closed state
+    } else if (currentState == State::SAFE_CLOSED) {
+        // Check if the push-button is pressed
+        if (rotaryController.checkDisplayModeChange() == 1) {
+            stateController.nextDisplayMode();
 
-        case State::SAFE_CLOSED:
+            Serial.print("Switched to display #");
+            Serial.println(stateController.getDisplay());
+        }
 
-            break;
+        // Check if the reset button is pressed
+        if (digitalController.readResetButton() == HIGH) {
+            segmentController.updateCurrentBasedOnDisplay(Display::ONE, 0);
+            segmentController.updateCurrentBasedOnDisplay(Display::TWO, 0);
+            segmentController.updateCurrentBasedOnDisplay(Display::THREE, 0);
+            return;
+        }
 
-        case State::BLOCKED:
+        if (digitalController.readConfirmButton() == HIGH) {
+            int convertedPassword = passwordController.convertDigits(currentDigitOne, currentDigitTwo,
+                                                                     currentDigitThree);
 
-            break;
+            // Check if the password is not correct, if so, fail unlocking part
+            Serial.println(passwordController.readPassword().getCode());
+            if (passwordController.readPassword().getCode() != convertedPassword) {
+                Serial.print("Password incorrect (#");
+                Serial.print(3 - passwordController.getPasswordTries() + 1);
+                Serial.println(" try)");
 
+                // Check if the user tried to enter the password too many times
+                passwordController.decreasePasswordTries();
+                if (passwordController.getPasswordTries() <= 0) {
+                    buzzerController.play(2);
+                    segmentController.displayManual(0,0,0);
+                    stateController.setState(State::BLOCKED);
+                    return;
+                } else {
+                    buzzerController.play(1);
+                    digitalController.writeRedLed(HIGH);
+                    segmentController.displayManual(0,0,0);
+                    delay(1000);
+                    digitalController.writeRedLed(LOW);
+                    return;
+                }
+
+                // The password is correct, so the safe should be opened
+            } else {
+                Serial.println("Password correct");
+                digitalController.writeGreenLed(HIGH);
+                servoController.setOpen();
+                servoController.rotate();
+                stateController.setState(SAFE_OPEN);
+                return;
+            }
+        }
+
+        // Recover the encoder values of the displays
+        rotaryController.recoverEncoderValueOfDisplay(currentDisplay, currentDigitOne, currentDigitTwo,
+                                                      currentDigitThree);
+        // Update the current displays based on the encoder position
+        segmentController.updateCurrentBasedOnDisplay(currentDisplay, rotaryController.readEncoderPosition());
+
+        // Blocked state
+    } else if (currentState == State::BLOCKED) {
+        int blockedCountdown = segmentController.updateBlockedCountdown();
+        digitalController.writeRedLed(HIGH);
+
+        if (blockedCountdown == -1) {
+            digitalController.writeRedLed(LOW);
+            passwordController.resetPasswordTries();
+            stateController.setState(State::SAFE_CLOSED);
+
+            Serial.println("Blocked state has expired");
+            return;
+        }
+
+        // Resetting state
+    } else if (currentState == State::SAFE_RESET) {
+        // Check if the confirm button is pressed
+        if (digitalController.readConfirmButton() == HIGH) {
+            int convertedPassword = passwordController.convertDigits(currentDigitOne, currentDigitTwo,
+                                                                     currentDigitThree);
+            passwordController.savePassword(convertedPassword);
+            servoController.setClosed();
+            servoController.rotate();
+            stateController.setState(SAFE_CLOSED);
+            digitalController.writeGreenLed(LOW);
+            return;
+        }
+
+        // Check if the display mode change button is pressed
+        if (rotaryController.checkDisplayModeChange() == 1) {
+            stateController.nextDisplayMode();
+
+            Serial.print("Switched to display ");
+            Serial.println(stateController.getDisplay());
+            return;
+        }
+
+        // Recover the encoder values of the displays
+        rotaryController.recoverEncoderValueOfDisplay(currentDisplay, currentDigitOne, currentDigitTwo,
+                                                      currentDigitThree);
+        // Update the current displays based on the encoder position
+        segmentController.updateCurrentBasedOnDisplay(currentDisplay, rotaryController.readEncoderPosition());
     }
+
+    segmentController.displayManual(currentDigitOne, currentDigitTwo, currentDigitThree);
 }
