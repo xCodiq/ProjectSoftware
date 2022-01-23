@@ -1,3 +1,14 @@
+/**
+ * PROJECT SOFTWARE - SAXION 2022
+ *
+ * Naam Project: Locky
+ * Datum: 23-01-2022
+ * Versie: 1.0
+ * Door: Jesse Dijksma, Elmar Blume, Rowan Ali
+ *
+ * Beschrijving: Dit programma bestuurd de kluis, doormiddel van een Arduino UNO, die Locky heeft gemaakt voor het vak Project Software.
+ */
+
 // Include all the libraries used in this program
 #include <Arduino.h>
 #include <EEPROM.h>
@@ -372,7 +383,7 @@ public:
     SegmentController() = default;
 
 private:
-    int selectedSegment = 1, blockedCountdown = 5, currentValueOne = 0, currentValueTwo = 0, currentValueThree = 0;
+    int selectedSegment = 1, blockedCountdown = 60, currentValueOne = 0, currentValueTwo = 0, currentValueThree = 0;
     unsigned long lastBlockedCountdownUpdate = 0;
 
 public:
@@ -416,6 +427,10 @@ public:
         this->display(Display::ONE, this->getCurrentOne());
         this->display(Display::TWO, this->getCurrentTwo());
         this->display(Display::THREE, this->getCurrentThree());
+    }
+
+    void resetBlockedCountdown() {
+        this->blockedCountdown = 60;
     }
 
     int updateBlockedCountdown() {
@@ -787,6 +802,7 @@ void loop() {
         if (blockedCountdown == -1) {
             digitalController.writeRedLed(LOW);
             passwordController.resetPasswordTries();
+            segmentController.resetBlockedCountdown();
             stateController.setState(State::SAFE_CLOSED);
 
             Serial.println("Blocked state has expired");
@@ -800,6 +816,7 @@ void loop() {
             int convertedPassword = passwordController.convertDigits(currentDigitOne, currentDigitTwo,
                                                                      currentDigitThree);
             passwordController.savePassword(convertedPassword);
+            passwordController.resetPasswordTries();
             servoController.setClosed();
             servoController.rotate();
             stateController.setState(SAFE_CLOSED);
